@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>P2P Discord Chat (6-Digit Rooms)</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #313338;
+            --bg-secondary: #2b2d31;
+            --bg-tertiary: #1e1f22;
+            --text-normal: #dbdee1;
+            --text-muted: #949ba4;
+            --brand: #5865f2;
+            --brand-hover: #4752c4;
+            --success: #23a55a;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'GG Sans', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-normal);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Setup / Connection Panel */
+        #setup-panel {
+            width: 320px;
+            background-color: var(--bg-tertiary);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #3f4147;
+            box-sizing: border-box;
+        }
+
+        .header-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 5px;
+        }
+
+        .discord-logo {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+        }
+
+        h2, h3 {
+            margin: 0;
+            color: #fff;
+        }
+
+        h2 { font-size: 20px; }
+        h3 { font-size: 13px; text-transform: uppercase; color: var(--text-muted); margin-top: 10px;}
+
+        input[type="text"] {
+            width: 100%;
+            background-color: var(--bg-secondary);
+            border: 1px solid #111;
+            color: var(--text-normal);
+            padding: 10px;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+            outline: none;
+        }
+        
+        input[type="text"]:focus {
+            border-color: var(--brand);
+        }
+
+        .code-display {
+            font-size: 24px;
+            font-weight: bold;
+            letter-spacing: 4px;
+            text-align: center;
+            background: #111;
+            padding: 10px;
+            border-radius: 4px;
+            color: #fff;
+        }
+
+        button {
+            background-color: var(--brand);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        button:hover { background-color: var(--brand-hover); }
+        button:disabled { background-color: #4e5058; cursor: not-allowed; }
+        
+        .status {
+            padding: 8px;
+            border-radius: 4px;
+            background: #222;
+            font-size: 13px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .disconnected { color: #f23f43; }
+        .connecting { color: #f0b232; }
+        .connected { color: var(--success); }
+
+        /* Chat Area Panel */
+        #chat-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-primary);
+        }
+
+        #messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .msg-header {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .username {
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .msg-text {
+            color: var(--text-normal);
+            word-break: break-word;
+            line-height: 1.375rem;
+        }
+
+        /* Input Area */
+        #input-area {
+            padding: 0 20px 24px 20px;
+        }
+
+        .input-wrapper {
+            background-color: #383a40;
+            border-radius: 8px;
+            padding: 11px 16px;
+        }
+
+        #msg-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-normal);
+            font-size: 16px;
+            outline: none;
+        }
+
+        #msg-input::placeholder { color: var(--text-muted); }
+    </style>
+</head>
+<body>
+
+    <div id="setup-panel">
+        <div class="header-container">
+            <img class="discord-logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQw6wiociLBFC-02UXkUifps90kccxYnApG-8Pd-CvhJQ&s=10" alt="Discord Icon">
+            <h2>P2P Room Chat</h2>
+        </div>
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;">
+
+        <h3>Your Identity</h3>
+        <input type="text" id="username-input" placeholder="Enter your username...">
+
+        <h3>Option A: Create a Room</h3>
+        <button id="btn-create">Generate 6-Digit Code</button>
+        <div id="room-code-output" class="code-display" style="display:none;">------</div>
+        
+        <h3>Option B: Join a Room</h3>
+        <input type="text" id="room-code-input" placeholder="Enter 6-digit code" maxlength="6">
+        <button id="btn-join" style="background-color: var(--success); margin-top: 5px;">Join Room</button>
+    </div>
+
+    <div id="chat-panel">
+        <div id="messages">
+            <div class="message">
+                <div class="msg-header">
+                    <span class="username" style="color: var(--brand);">System</span>
+                    <span class="timestamp">Now</span>
+                </div>
+                <div class="msg-text">Welcome! Pick a username, then create a 6-digit code or enter one from your peer to link dynamically via P2P WebRTC.</div>
+            </div>
+        </div>
+        <div id="input-area">
+            <div class="input-wrapper">
+                <input type="text" id="msg-input" placeholder="Chat is locked until P2P links..." disabled autocomplete="off">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        const mqttBroker = 'wss://broker.emqx.io:8084/mqtt'; 
+        
+        let peerConnection;
+        let dataChannel;
+        let mqttClient;
+        let currentRoomTopic = '';
+        let isHost = false;
+        
+        // יצירת מזהה ייחודי ורנדומלי לחלוטין לסיגנלינג כדי למנוע כפילויות בשמות
+        const myClientId = 'client_' + Math.floor(Math.random() * 1000000);
+        let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
+
+        const usernameInput = document.getElementById('username-input');
+        const btnCreate = document.getElementById('btn-create');
+        const btnJoin = document.getElementById('btn-join');
+        const roomCodeOutput = document.getElementById('room-code-output');
+        const roomCodeInput = document.getElementById('room-code-input');
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        const msgInput = document.getElementById('msg-input');
+
+        usernameInput.value = myUsername;
+
+        function finalizeUsername() {
+            const chosenName = usernameInput.value.trim();
+            if (chosenName !== "") {
+                myUsername = chosenName;
+            }
+            usernameInput.disabled = true;
+        }
+
+        function connectSignaling(roomCode, callback) {
+            updateStatus('connecting', 'Connecting via code...');
+            currentRoomTopic = `p2p/room/${roomCode}`;
+            
+            mqttClient = mqtt.connect(mqttBroker);
+            
+            mqttClient.on('connect', () => {
+                mqttClient.subscribe(currentRoomTopic, () => {
+                    callback();
+                });
+            });
+
+            mqttClient.on('message', async (topic, message) => {
+                const packet = JSON.parse(message.toString());
+                
+                // סינון הודעות לפי מזהה קליינט ייחודי במקום לפי השם הדינמי
+                if (packet.clientId === myClientId) return;
+
+                if (packet.type === 'join' && isHost) {
+                    initPeer();
+                    dataChannel = peerConnection.createDataChannel("chatChannel");
+                    setupDataChannelHandlers();
+
+                    const offer = await peerConnection.createOffer();
+                    await peerConnection.setLocalDescription(offer);
+                    sendSignal('offer', offer);
+                } else if (packet.type === 'offer' && !isHost) {
+                    await handleOffer(packet.data);
+                } else if (packet.type === 'answer' && isHost) {
+                    await handleAnswer(packet.data);
+                } else if (packet.type === 'ice') {
+                    if (peerConnection) {
+                        try { await peerConnection.addIceCandidate(packet.data); } catch(e){}
+                    }
+                }
+            });
+        }
+
+        function sendSignal(type, data) {
+            if (mqttClient) {
+                // הוספת ה-clientId לחבילה
+                const payload = JSON.stringify({ clientId: myClientId, sender: myUsername, type: type, data: data });
+                mqttClient.publish(currentRoomTopic, payload);
+            }
+        }
+
+        function initPeer() {
+            peerConnection = new RTCPeerConnection(rtcConfig);
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    sendSignal('ice', event.candidate);
+                }
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                if(peerConnection.connectionState === 'connected') {
+                    updateStatus('connected');
+                    // השארנו את ה-MQTT פתוח לעוד כמה שניות ליתר ביטחון, ואז סוגרים
+                    setTimeout(() => {
+                        if(mqttClient) mqttClient.end(); 
+                    }, 5000);
+                } else if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
+                    updateStatus('disconnected');
+                }
+            };
+        }
+
+        btnCreate.addEventListener('click', () => {
+            finalizeUsername();
+            isHost = true;
+            const generatedCode = Math.floor(100000 + Math.random() * 900000).toString(); 
+            roomCodeOutput.textContent = generatedCode;
+            roomCodeOutput.style.display = 'block';
+            btnCreate.disabled = true;
+            btnJoin.disabled = true;
+
+            connectSignaling(generatedCode, () => {
+                updateStatus('connecting', 'Waiting for peer to join...');
+            });
+        });
+
+        btnJoin.addEventListener('click', () => {
+            const code = roomCodeInput.value.trim();
+            if (code.length !== 6 || isNaN(code)) return alert("Please enter a valid 6-digit room code.");
+
+            finalizeUsername();
+            isHost = false;
+            btnCreate.disabled = true;
+            btnJoin.disabled = true;
+
+            connectSignaling(code, () => {
+                updateStatus('connecting', 'Notifying host...');
+                sendSignal('join', null);
+            });
+        });
+
+        async function handleOffer(offerData) {
+            initPeer();
+            peerConnection.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                setupDataChannelHandlers();
+            };
+
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offerData));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+            sendSignal('answer', answer);
+        }
+
+        async function handleAnswer(answerData) {
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(answerData));
+        }
+
+        function setupDataChannelHandlers() {
+            dataChannel.onopen = () => {
+                updateStatus('connected');
+                msgInput.removeAttribute('disabled');
+                msgInput.placeholder = `Message as ${myUsername}`;
+            };
+
+            dataChannel.onclose = () => {
+                updateStatus('disconnected');
+                msgInput.setAttribute('disabled', 'true');
+            };
+
+            dataChannel.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                appendMessage(data.user, data.text, false);
+            };
+        }
+
+        function updateStatus(state, customText) {
+            statusDiv.className = `status ${state}`;
+            if (state === 'connected') statusDiv.textContent = "Connected (P2P Direct)";
+            else if (state === 'connecting') statusDiv.textContent = customText || "Connecting...";
+            else statusDiv.textContent = "Disconnected";
+        }
+
+        msgInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && msgInput.value.trim() !== '') {
+                const text = msgInput.value.trim();
+                const payload = { user: myUsername, text: text };
+                dataChannel.send(JSON.stringify(payload));
+                appendMessage(myUsername, text, true);
+                msgInput.value = '';
+            }
+        });
+
+        function appendMessage(username, text, isMe) {
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const userColor = isMe ? '#5865f2' : '#f23f43';
+            
+            const msgHtml = `
+                <div class="message">
+                    <div class="msg-header">
+                        <span class="username" style="color: ${userColor};">${username}</span>
+                        <span class="timestamp">Today at ${time}</span>
+                    </div>
+                    <div class="msg-text">${escapeHTML(text)}</div>
+                </div>
+            `;
+            messagesDiv.insertAdjacentHTML('beforeend', msgHtml);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag));
+        }
+    </script>
+</body>
+</html>
