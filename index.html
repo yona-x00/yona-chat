@@ -38,6 +38,7 @@
             gap: 15px;
             border-right: 1px solid #3f4147;
             box-sizing: border-box;
+            z-index: 10;
         }
 
         .header-container {
@@ -181,6 +182,53 @@
         }
 
         #msg-input::placeholder { color: var(--text-muted); }
+
+        /* ==========================================================================
+           התאמה למכשירים ניידים וטאבלטים (Responsive Design)
+           ========================================================================== */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column; /* הופך את הפריסה מאופקית לאנכית */
+            }
+
+            #setup-panel {
+                width: 100%; /* תופס את כל רוחב המסך בנייד */
+                border-right: none;
+                border-bottom: 1px solid #3f4147;
+                padding: 12px;
+                gap: 10px;
+                box-sizing: border-box;
+            }
+
+            .header-container {
+                display: none; /* מסתיר את הלוגו והכותרת הגדולה בנייד כדי לחסוך מקום */
+            }
+
+            h3 {
+                margin-top: 5px;
+                font-size: 11px;
+            }
+
+            /* סידור אופקי חסכוני במקום לאפשרויות החיבור בנייד */
+            #setup-panel > h3:nth-of-type(2), 
+            #setup-panel > h3:nth-of-type(3) {
+                display: none; /* מסתיר את כותרות "Option A" ו-"Option B" */
+            }
+
+            .code-display {
+                font-size: 18px;
+                padding: 6px;
+            }
+
+            button, input[type="text"] {
+                padding: 8px;
+                font-size: 13px;
+            }
+
+            #input-area {
+                padding: 0 10px 10px 10px; /* צמצום שוליים התחתונים בנייד למניעת מרווח מוגזם מהמקלדת */
+            }
+        }
     </style>
 </head>
 <body>
@@ -192,7 +240,7 @@
         </div>
         <div id="status" class="status disconnected">Disconnected</div>
         
-        <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;">
+        <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;" class="header-container">
 
         <h3>Your Identity</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
@@ -239,7 +287,6 @@
         let currentRoomTopic = '';
         let isHost = false;
         
-        // יצירת מזהה ייחודי ורנדומלי לחלוטין לסיגנלינג כדי למנוע כפילויות בשמות
         const myClientId = 'client_' + Math.floor(Math.random() * 1000000);
         let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
 
@@ -277,7 +324,6 @@
             mqttClient.on('message', async (topic, message) => {
                 const packet = JSON.parse(message.toString());
                 
-                // סינון הודעות לפי מזהה קליינט ייחודי במקום לפי השם הדינמי
                 if (packet.clientId === myClientId) return;
 
                 if (packet.type === 'join' && isHost) {
@@ -302,7 +348,6 @@
 
         function sendSignal(type, data) {
             if (mqttClient) {
-                // הוספת ה-clientId לחבילה
                 const payload = JSON.stringify({ clientId: myClientId, sender: myUsername, type: type, data: data });
                 mqttClient.publish(currentRoomTopic, payload);
             }
@@ -320,7 +365,6 @@
             peerConnection.onconnectionstatechange = () => {
                 if(peerConnection.connectionState === 'connected') {
                     updateStatus('connected');
-                    // השארנו את ה-MQTT פתוח לעוד כמה שניות ליתר ביטחון, ואז סוגרים
                     setTimeout(() => {
                         if(mqttClient) mqttClient.end(); 
                     }, 5000);
