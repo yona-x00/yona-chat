@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>P2P Discord Chat (6-Digit Rooms)</title>
+    <title>yona chat</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
@@ -183,12 +183,10 @@
 
         #msg-input::placeholder { color: var(--text-muted); }
 
-        /* ==========================================================================
-           התאמה למובייל ומסכים קטנים (Responsive Queries)
-           ========================================================================== */
+        /* Responsive Mobile Layout */
         @media (max-width: 768px) {
             body {
-                flex-direction: column; /* העברת הפאנלים למבנה אנכי */
+                flex-direction: column;
             }
 
             #setup-panel {
@@ -200,20 +198,10 @@
                 gap: 10px;
             }
 
-            h3 {
-                margin-top: 5px;
-            }
+            h3 { margin-top: 5px; }
+            #messages { padding: 15px; gap: 12px; }
+            #input-area { padding: 0 12px 16px 12px; }
 
-            #messages {
-                padding: 15px;
-                gap: 12px;
-            }
-
-            #input-area {
-                padding: 0 12px 16px 12px;
-            }
-
-            /* כשהצ'אט מחובר בהצלחה במובייל, נעלים את ה-Setup panel כדי לפנות מקום למסך מלא */
             body.connected-layout #setup-panel {
                 display: none;
             }
@@ -234,11 +222,11 @@
         <h3>Your Identity</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
 
-        <h3> Create a Room</h3>
+        <h3>Option A: Create a Room</h3>
         <button id="btn-create">Generate 6-Digit Code</button>
         <div id="room-code-output" class="code-display" style="display:none;">------</div>
         
-        <h3> Join a Room</h3>
+        <h3>Option B: Join a Room</h3>
         <input type="text" id="room-code-input" placeholder="Enter 6-digit code" maxlength="6">
         <button id="btn-join" style="background-color: var(--success); margin-top: 5px;">Join Room</button>
     </div>
@@ -250,7 +238,7 @@
                     <span class="username" style="color: var(--brand);">System</span>
                     <span class="timestamp">Now</span>
                 </div>
-                <div class="msg-text">Welcome! Pick a username, then create a 6-digit code or enter one from your peer to link dynamically via P2P WebRTC.</div>
+                <div class="msg-text">Welcome! Create or join a room. Up to 7+ users can link directly via a P2P WebRTC Mesh network.</div>
             </div>
         </div>
         <div id="input-area">
@@ -270,13 +258,13 @@
 
         const mqttBroker = 'wss://broker.emqx.io:8084/mqtt'; 
         
-        let peerConnection;
-        let dataChannel;
+        // מבנה נתונים שמחזיק את כל ה-Peers המחוברים: clientId -> { peerConnection, dataChannel, username }
+        const peers = {}; 
+        
         let mqttClient;
         let currentRoomTopic = '';
-        let isHost = false;
         
-        const myClientId = 'client_' + Math.floor(Math.random() * 1000000);
+        const myClientId = 'client_' + Math.floor(Math.random() * 10000000);
         let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
 
         const usernameInput = document.getElementById('username-input');
@@ -299,7 +287,7 @@
         }
 
         function connectSignaling(roomCode, callback) {
-            updateStatus('connecting', 'Connecting via code...');
+            updateRoomStatus('connecting', 'Connecting to signaling...');
             currentRoomTopic = `p2p/room/${roomCode}`;
             
             mqttClient = mqtt.connect(mqttBroker);
@@ -311,61 +299,162 @@
             });
 
             mqttClient.on('message', async (topic, message) => {
-                const packet = JSON.parse(message.toString());
-                
-                if (packet.clientId === myClientId) return;
+                try {
+                    const packet = JSON.parse(message.toString());
+                    
+                    // סינון הודעות עצמיות והודעות שלא מיועדות אלינו (אם יש יעד מוגדר)
+                    if (packet.clientId === myClientId) return;
+                    if (packet.targetId && packet.targetId !== myClientId) return;
 
-                if (packet.type === 'join' && isHost) {
-                    initPeer();
-                    dataChannel = peerConnection.createDataChannel("chatChannel");
-                    setupDataChannelHandlers();
-
-                    const offer = await peerConnection.createOffer();
-                    await peerConnection.setLocalDescription(offer);
-                    sendSignal('offer', offer);
-                } else if (packet.type === 'offer' && !isHost) {
-                    await handleOffer(packet.data);
-                } else if (packet.type === 'answer' && isHost) {
-                    await handleAnswer(packet.data);
-                } else if (packet.type === 'ice') {
-                    if (peerConnection) {
-                        try { await peerConnection.addIceCandidate(packet.data); } catch(e){}
+                    if (packet.type === 'join') {
+                        // משתמש חדש נכנס. אם ה-ID שלנו גדול משלו, ניזום אליו חיבור. אחרת, נשלח לו נוכחות והוא יזום אלינו.
+                        if (myClientId > packet.clientId) {
+                            initPeer(packet.clientId, packet.sender, true);
+                        } else {
+                            sendSignal('presence', null, packet.clientId);
+                        }
+                    } 
+                    else if (packet.type === 'presence') {
+                        // קיבלנו אישור נוכחות ממשתמש קיים. מכיוון שהגענו לפה רק אם ה-ID שלנו גדול משלו, ניזום אליו חיבור.
+                        if (myClientId > packet.clientId) {
+                            initPeer(packet.clientId, packet.sender, true);
+                        }
+                    } 
+                    else if (packet.type === 'offer') {
+                        const pc = initPeer(packet.clientId, packet.sender, false);
+                        await pc.setRemoteDescription(new RTCSessionDescription(packet.data));
+                        const answer = await pc.createAnswer();
+                        await pc.setLocalDescription(answer);
+                        sendSignal('answer', answer, packet.clientId);
+                    } 
+                    else if (packet.type === 'answer') {
+                        if (peers[packet.clientId]) {
+                            await peers[packet.clientId].peerConnection.setRemoteDescription(new RTCSessionDescription(packet.data));
+                        }
+                    } 
+                    else if (packet.type === 'ice') {
+                        if (peers[packet.clientId]) {
+                            try { await peers[packet.clientId].peerConnection.addIceCandidate(packet.data); } catch(e){}
+                        }
                     }
+                } catch(e) {
+                    console.error("Signaling parsing error", e);
                 }
             });
         }
 
-        function sendSignal(type, data) {
-            if (mqttClient) {
-                const payload = JSON.stringify({ clientId: myClientId, sender: myUsername, type: type, data: data });
+        function sendSignal(type, data, targetId = null) {
+            if (mqttClient && mqttClient.connected) {
+                const payload = JSON.stringify({ 
+                    clientId: myClientId, 
+                    sender: myUsername, 
+                    type: type, 
+                    data: data,
+                    targetId: targetId 
+                });
                 mqttClient.publish(currentRoomTopic, payload);
             }
         }
 
-        function initPeer() {
-            peerConnection = new RTCPeerConnection(rtcConfig);
+        function initPeer(targetId, targetUsername, isInitiator) {
+            if (peers[targetId]) return peers[targetId].peerConnection;
 
-            peerConnection.onicecandidate = (event) => {
+            const pc = new RTCPeerConnection(rtcConfig);
+            peers[targetId] = {
+                peerConnection: pc,
+                username: targetUsername,
+                dataChannel: null
+            };
+
+            pc.onicecandidate = (event) => {
                 if (event.candidate) {
-                    sendSignal('ice', event.candidate);
+                    sendSignal('ice', event.candidate, targetId);
                 }
             };
 
-            peerConnection.onconnectionstatechange = () => {
-                if(peerConnection.connectionState === 'connected') {
-                    updateStatus('connected');
-                    setTimeout(() => {
-                        if(mqttClient) mqttClient.end(); 
-                    }, 5000);
-                } else if (peerConnection.connectionState === 'failed' || peerConnection.connectionState === 'closed') {
-                    updateStatus('disconnected');
+            pc.onconnectionstatechange = () => {
+                if(pc.connectionState === 'connected') {
+                    updateRoomStatus();
+                } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+                    handlePeerDisconnect(targetId);
                 }
             };
+
+            if (isInitiator) {
+                const dc = pc.createDataChannel("chatChannel");
+                peers[targetId].dataChannel = dc;
+                setupDataChannelHandlers(dc, targetId, targetUsername);
+
+                pc.createOffer().then(offer => {
+                    return pc.setLocalDescription(offer);
+                }).then(() => {
+                    sendSignal('offer', pc.localDescription, targetId);
+                });
+            } else {
+                pc.ondatachannel = (event) => {
+                    const dc = event.channel;
+                    peers[targetId].dataChannel = dc;
+                    setupDataChannelHandlers(dc, targetId, targetUsername);
+                };
+            }
+
+            return pc;
+        }
+
+        function setupDataChannelHandlers(dc, targetId, targetUsername) {
+            dc.onopen = () => {
+                updateRoomStatus();
+            };
+
+            dc.onclose = () => {
+                handlePeerDisconnect(targetId);
+            };
+
+            dc.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                appendMessage(data.user, data.text, false);
+            };
+        }
+
+        function handlePeerDisconnect(targetId) {
+            if (peers[targetId]) {
+                try { peers[targetId].peerConnection.close(); } catch(e){}
+                delete peers[targetId];
+            }
+            updateRoomStatus();
+        }
+
+        function updateRoomStatus(forcedState, forcedText) {
+            if (forcedState) {
+                statusDiv.className = `status ${forcedState}`;
+                statusDiv.textContent = forcedText;
+                return;
+            }
+
+            // ספירת חיבורי ה-P2P הפעילים ברשת ה-Mesh
+            let connectedCount = 0;
+            for (let id in peers) {
+                if (peers[id].dataChannel && peers[id].dataChannel.readyState === 'open') {
+                    connectedCount++;
+                }
+            }
+
+            if (connectedCount > 0) {
+                statusDiv.className = "status connected";
+                statusDiv.textContent = `Connected (${connectedCount + 1} users in room)`;
+                msgInput.removeAttribute('disabled');
+                msgInput.placeholder = `Message as ${myUsername}`;
+                document.body.classList.add('connected-layout');
+            } else {
+                statusDiv.className = "status connecting";
+                statusDiv.textContent = "Waiting for peers...";
+                msgInput.setAttribute('disabled', 'true');
+                document.body.classList.remove('connected-layout');
+            }
         }
 
         btnCreate.addEventListener('click', () => {
             finalizeUsername();
-            isHost = true;
             const generatedCode = Math.floor(100000 + Math.random() * 900000).toString(); 
             roomCodeOutput.textContent = generatedCode;
             roomCodeOutput.style.display = 'block';
@@ -373,7 +462,8 @@
             btnJoin.disabled = true;
 
             connectSignaling(generatedCode, () => {
-                updateStatus('connecting', 'Waiting for peer to join...');
+                updateRoomStatus('connecting', 'Waiting for peers to join...');
+                sendSignal('join', null);
             });
         });
 
@@ -382,69 +472,28 @@
             if (code.length !== 6 || isNaN(code)) return alert("Please enter a valid 6-digit room code.");
 
             finalizeUsername();
-            isHost = false;
             btnCreate.disabled = true;
             btnJoin.disabled = true;
 
             connectSignaling(code, () => {
-                updateStatus('connecting', 'Notifying host...');
-                sendSignal('join', null);
+                updateRoomStatus('connecting', 'Joining mesh room...');
+                sendSignal('join', null); // מכריז לכולם בחדר שמישהו חדש נכנס
             });
         });
-
-        async function handleOffer(offerData) {
-            initPeer();
-            peerConnection.ondatachannel = (event) => {
-                dataChannel = event.channel;
-                setupDataChannelHandlers();
-            };
-
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(offerData));
-            const answer = await peerConnection.createAnswer();
-            await peerConnection.setLocalDescription(answer);
-            sendSignal('answer', answer);
-        }
-
-        async function handleAnswer(answerData) {
-            await peerConnection.setRemoteDescription(new RTCSessionDescription(answerData));
-        }
-
-        function setupDataChannelHandlers() {
-            dataChannel.onopen = () => {
-                updateStatus('connected');
-                msgInput.removeAttribute('disabled');
-                msgInput.placeholder = `Message as ${myUsername}`;
-            };
-
-            dataChannel.onclose = () => {
-                updateStatus('disconnected');
-                msgInput.setAttribute('disabled', 'true');
-            };
-
-            dataChannel.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                appendMessage(data.user, data.text, false);
-            };
-        }
-
-        function updateStatus(state, customText) {
-            statusDiv.className = `status ${state}`;
-            if (state === 'connected') {
-                statusDiv.textContent = "Connected (P2P Direct)";
-                document.body.classList.add('connected-layout'); // מוסיף קלאס שמסתיר את ה-Setup במובייל
-            } else if (state === 'connecting') {
-                statusDiv.textContent = customText || "Connecting...";
-            } else {
-                statusDiv.textContent = "Disconnected";
-                document.body.classList.remove('connected-layout'); // מחזיר את הפאנל במידה והתנתק
-            }
-        }
 
         msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && msgInput.value.trim() !== '') {
                 const text = msgInput.value.trim();
                 const payload = { user: myUsername, text: text };
-                dataChannel.send(JSON.stringify(payload));
+                const stringPayload = JSON.stringify(payload);
+                
+                // שליחת ההודעה לכל המשתמשים ברשת ה-Mesh
+                for (let id in peers) {
+                    if (peers[id].dataChannel && peers[id].dataChannel.readyState === 'open') {
+                        peers[id].dataChannel.send(stringPayload);
+                    }
+                }
+                
                 appendMessage(myUsername, text, true);
                 msgInput.value = '';
             }
