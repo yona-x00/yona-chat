@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>yona chat</title>
+    <title>P2P Discord Chat (6-Digit Rooms)</title>
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <style>
         :root {
@@ -38,7 +38,7 @@
             gap: 15px;
             border-right: 1px solid #3f4147;
             box-sizing: border-box;
-            z-index: 10;
+            flex-shrink: 0;
         }
 
         .header-container {
@@ -184,49 +184,38 @@
         #msg-input::placeholder { color: var(--text-muted); }
 
         /* ==========================================================================
-           התאמה למכשירים ניידים וטאבלטים (Responsive Design)
+           התאמה למובייל ומסכים קטנים (Responsive Queries)
            ========================================================================== */
         @media (max-width: 768px) {
             body {
-                flex-direction: column; /* הופך את הפריסה מאופקית לאנכית */
+                flex-direction: column; /* העברת הפאנלים למבנה אנכי */
             }
 
             #setup-panel {
-                width: 100%; /* תופס את כל רוחב המסך בנייד */
+                width: 100%;
+                height: auto;
                 border-right: none;
                 border-bottom: 1px solid #3f4147;
-                padding: 12px;
+                padding: 15px;
                 gap: 10px;
-                box-sizing: border-box;
-            }
-
-            .header-container {
-                display: none; /* מסתיר את הלוגו והכותרת הגדולה בנייד כדי לחסוך מקום */
             }
 
             h3 {
                 margin-top: 5px;
-                font-size: 11px;
             }
 
-            /* סידור אופקי חסכוני במקום לאפשרויות החיבור בנייד */
-            #setup-panel > h3:nth-of-type(2), 
-            #setup-panel > h3:nth-of-type(3) {
-                display: none; /* מסתיר את כותרות "Option A" ו-"Option B" */
-            }
-
-            .code-display {
-                font-size: 18px;
-                padding: 6px;
-            }
-
-            button, input[type="text"] {
-                padding: 8px;
-                font-size: 13px;
+            #messages {
+                padding: 15px;
+                gap: 12px;
             }
 
             #input-area {
-                padding: 0 10px 10px 10px; /* צמצום שוליים התחתונים בנייד למניעת מרווח מוגזם מהמקלדת */
+                padding: 0 12px 16px 12px;
+            }
+
+            /* כשהצ'אט מחובר בהצלחה במובייל, נעלים את ה-Setup panel כדי לפנות מקום למסך מלא */
+            body.connected-layout #setup-panel {
+                display: none;
             }
         }
     </style>
@@ -240,16 +229,16 @@
         </div>
         <div id="status" class="status disconnected">Disconnected</div>
         
-        <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;" class="header-container">
+        <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;">
 
         <h3>Your Identity</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
 
-        <h3>Option A: Create a Room</h3>
+        <h3> Create a Room</h3>
         <button id="btn-create">Generate 6-Digit Code</button>
         <div id="room-code-output" class="code-display" style="display:none;">------</div>
         
-        <h3>Option B: Join a Room</h3>
+        <h3> Join a Room</h3>
         <input type="text" id="room-code-input" placeholder="Enter 6-digit code" maxlength="6">
         <button id="btn-join" style="background-color: var(--success); margin-top: 5px;">Join Room</button>
     </div>
@@ -440,9 +429,15 @@
 
         function updateStatus(state, customText) {
             statusDiv.className = `status ${state}`;
-            if (state === 'connected') statusDiv.textContent = "Connected (P2P Direct)";
-            else if (state === 'connecting') statusDiv.textContent = customText || "Connecting...";
-            else statusDiv.textContent = "Disconnected";
+            if (state === 'connected') {
+                statusDiv.textContent = "Connected (P2P Direct)";
+                document.body.classList.add('connected-layout'); // מוסיף קלאס שמסתיר את ה-Setup במובייל
+            } else if (state === 'connecting') {
+                statusDiv.textContent = customText || "Connecting...";
+            } else {
+                statusDiv.textContent = "Disconnected";
+                document.body.classList.remove('connected-layout'); // מחזיר את הפאנל במידה והתנתק
+            }
         }
 
         msgInput.addEventListener('keydown', (e) => {
