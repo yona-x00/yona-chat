@@ -77,6 +77,39 @@
         
         input[type="text"]:focus { border-color: var(--brand); }
 
+        .avatar-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 5px;
+            flex-wrap: wrap;
+        }
+
+        .avatar-opt {
+            font-size: 24px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-secondary);
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .avatar-opt:hover {
+            background-color: #383a40;
+            transform: scale(1.05);
+        }
+
+        .avatar-opt.active {
+            border-color: var(--brand);
+            background-color: #383a40;
+            box-shadow: 0 0 8px rgba(88, 101, 242, 0.5);
+        }
+
         .mode-container {
             display: flex;
             gap: 10px;
@@ -224,7 +257,29 @@
             gap: 16px;
         }
 
-        .message { display: flex; flex-direction: column; }
+        .message { 
+            display: flex; 
+            flex-direction: row; 
+            gap: 12px; 
+            align-items: flex-start; 
+        }
+        .msg-pfp {
+            font-size: 24px;
+            width: 36px;
+            height: 36px;
+            background-color: var(--bg-secondary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            user-select: none;
+        }
+        .msg-body {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
         .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
         .username { font-weight: 600; color: #fff; }
         .timestamp { font-size: 12px; color: var(--text-muted); }
@@ -270,6 +325,25 @@
         <h3>Your Name</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
 
+        <h3>Select Avatar (PFP)</h3>
+        <div class="avatar-selector" id="avatar-picker">
+            <div class="avatar-opt active" data-avatar="🐱">🐱</div>
+            <div class="avatar-opt" data-avatar="🦊">🦊</div>
+            <div class="avatar-opt" data-avatar="🤖">🤖</div>
+            <div class="avatar-opt" data-avatar="🥷">🥷</div>
+            <div class="avatar-opt" data-avatar="👽">👽</div>
+            <div class="avatar-opt" data-avatar="🐼">🐼</div>
+            <div class="avatar-opt" data-avatar="🦁">🦁</div>
+            <div class="avatar-opt" data-avatar="🐸">🐸</div>
+            <div class="avatar-opt" data-avatar="🐲">🐲</div>
+            <div class="avatar-opt" data-avatar="👻">👻</div>
+            <div class="avatar-opt" data-avatar="🧛">🧛</div>
+            <div class="avatar-opt" data-avatar="🧙">🧙</div>
+            <div class="avatar-opt" data-avatar="👨‍💻">👨‍💻</div>
+            <div class="avatar-opt" data-avatar="👾">👾</div>
+            <div class="avatar-opt" data-avatar="👑">👑</div>
+        </div>
+
         <h3>Select Room Type</h3>
         <div class="mode-container">
             <button id="btn-mode-text" class="mode-btn active">💬 Text Chat</button>
@@ -297,11 +371,14 @@
 
         <div id="messages">
             <div class="message">
-                <div class="msg-header">
-                    <span class="username" style="color: var(--brand);">System</span>
-                    <span class="timestamp">Now</span>
+                <div class="msg-pfp">📢</div>
+                <div class="msg-body">
+                    <div class="msg-header">
+                        <span class="username" style="color: var(--brand);">System</span>
+                        <span class="timestamp">Now</span>
+                    </div>
+                    <div class="msg-text">Welcome to yona chat! Connect to a room to start a conversation.</div>
                 </div>
-                <div class="msg-text">Welcome! to yona chat to start a coversation</div>
             </div>
         </div>
         <div id="input-area">
@@ -331,9 +408,11 @@
         let isSharingScreen = false;
         
         const myClientId = 'client_' + Math.floor(Math.random() * 10000000);
-        let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
+        let myUsername = localStorage.getItem('yona_username') || 'User_' + Math.floor(Math.random() * 9000 + 1000);
+        let myAvatar = localStorage.getItem('yona_avatar') || '🐱';
 
         const usernameInput = document.getElementById('username-input');
+        const avatarPicker = document.getElementById('avatar-picker');
         const btnCreate = document.getElementById('btn-create');
         const btnJoin = document.getElementById('btn-join');
         const roomCodeOutput = document.getElementById('room-code-output');
@@ -352,6 +431,24 @@
         const btnModeVideo = document.getElementById('btn-mode-video');
 
         usernameInput.value = myUsername;
+        setupAvatarUI();
+
+        function setupAvatarUI() {
+            const opts = avatarPicker.querySelectorAll('.avatar-opt');
+            opts.forEach(opt => {
+                opt.classList.remove('active');
+                if (opt.getAttribute('data-avatar') === myAvatar) {
+                    opt.classList.add('active');
+                }
+                opt.onclick = () => {
+                    if(usernameInput.disabled) return; 
+                    opts.forEach(o => o.classList.remove('active'));
+                    opt.classList.add('active');
+                    myAvatar = opt.getAttribute('data-avatar');
+                    localStorage.setItem('yona_avatar', myAvatar); 
+                };
+            });
+        }
 
         btnModeText.addEventListener('click', () => {
             selectedMode = 'text';
@@ -368,6 +465,10 @@
         function finalizeUsername() {
             const chosenName = usernameInput.value.trim();
             if (chosenName !== "") myUsername = chosenName;
+            
+            localStorage.setItem('yona_username', myUsername);
+            localStorage.setItem('yona_avatar', myAvatar);
+
             usernameInput.disabled = true;
             btnModeText.disabled = true;
             btnModeVideo.disabled = true;
@@ -383,7 +484,7 @@
                 addVideoElement('local', `${myUsername} (You)`, localStream, true);
             } catch (err) {
                 console.error("Error accessing media devices.", err);
-                alert("Camera blocked or HTTP insecure environment. Buttons are visible, but devices won't broadcast without HTTPS or localhost.");
+                alert("Camera blocked or HTTP insecure environment.");
             }
         }
 
@@ -494,7 +595,7 @@
             dc.onclose = () => handlePeerDisconnect(targetId);
             dc.onmessage = (event) => {
                 const data = JSON.parse(event.data);
-                appendMessage(data.user, data.text, false);
+                appendMessage(data.user, data.text, false, data.avatar || '🐱');
             };
         }
 
@@ -630,7 +731,6 @@
             }
         });
 
-        // פונקציית עזר להחלפת ה-Track אצל כל חברי ה-Mesh בבת אחת
         async function replaceLocalVideoTrack(newTrack) {
             const oldTrack = localStream.getVideoTracks()[0];
             if (oldTrack) {
@@ -677,24 +777,20 @@
             }
         });
 
-       
         btnShareScreen.addEventListener('click', async () => {
             if (!localStream) return;
 
             if (!isSharingScreen) {
                 try {
-                    
                     screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
                     const screenTrack = screenStream.getVideoTracks()[0];
 
-                    
                     screenTrack.onended = () => {
                         stopScreenSharing();
                     };
 
                     await replaceLocalVideoTrack(screenTrack);
 
-                    
                     const localVideoElem = document.querySelector('#video-wrap-local video');
                     if (localVideoElem) {
                         localVideoElem.srcObject = localStream;
@@ -704,17 +800,16 @@
                     isSharingScreen = true;
                     btnShareScreen.textContent = "🛑 Stop Share";
                     btnShareScreen.classList.add('btn-danger');
-                    btnSwitchCam.style.display = 'none'; // אין טעם להחליף מצלמה בזמן שיתוף מסך
+                    btnSwitchCam.style.display = 'none'; 
 
                 } catch (err) {
-                    console.error("Error standard screen sharing initialization:", err);
+                    console.error("Error screen sharing:", err);
                 }
             } else {
                 await stopScreenSharing();
             }
         });
 
-       
         async function stopScreenSharing() {
             if (!isSharingScreen) return;
 
@@ -723,7 +818,6 @@
             }
 
             try {
-                
                 const camStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: currentFacingMode }
                 });
@@ -752,7 +846,7 @@
         msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && msgInput.value.trim() !== '') {
                 const text = msgInput.value.trim();
-                const payload = { user: myUsername, text: text };
+                const payload = { user: myUsername, text: text, avatar: myAvatar };
                 const stringPayload = JSON.stringify(payload);
                 
                 for (let id in peers) {
@@ -760,22 +854,25 @@
                         peers[id].dataChannel.send(stringPayload);
                     }
                 }
-                appendMessage(myUsername, text, true);
+                appendMessage(myUsername, text, true, myAvatar);
                 msgInput.value = '';
             }
         });
 
-        function appendMessage(username, text, isMe) {
-            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        function appendMessage(username, text, isMe, avatar, customTime = null) {
+            const time = customTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             const userColor = isMe ? '#5865f2' : '#f23f43';
             
             const msgHtml = `
                 <div class="message">
-                    <div class="msg-header">
-                        <span class="username" style="color: ${userColor};">${username}</span>
-                        <span class="timestamp">Today at ${time}</span>
+                    <div class="msg-pfp">${avatar}</div>
+                    <div class="msg-body">
+                        <div class="msg-header">
+                            <span class="username" style="color: ${userColor};">${username}</span>
+                            <span class="timestamp">Today at ${time}</span>
+                        </div>
+                        <div class="msg-text">${escapeHTML(text)}</div>
                     </div>
-                    <div class="msg-text">${escapeHTML(text)}</div>
                 </div>
             `;
             messagesDiv.insertAdjacentHTML('beforeend', msgHtml);
