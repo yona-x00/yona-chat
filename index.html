@@ -15,6 +15,7 @@
             --brand: #5865f2;
             --brand-hover: #4752c4;
             --success: #23a55a;
+            --danger: #da373c;
         }
 
         body {
@@ -74,8 +75,25 @@
             outline: none;
         }
         
-        input[type="text"]:focus {
-            border-color: var(--brand);
+        input[type="text"]:focus { border-color: var(--brand); }
+
+        /* Mode Selector Buttons */
+        .mode-container {
+            display: flex;
+            gap: 10px;
+        }
+        .mode-btn {
+            flex: 1;
+            background-color: var(--bg-secondary);
+            border: 1px solid #222;
+            color: var(--text-muted);
+            padding: 10px;
+            font-size: 13px;
+        }
+        .mode-btn.active {
+            background-color: var(--brand);
+            color: white;
+            border-color: transparent;
         }
 
         .code-display {
@@ -116,14 +134,68 @@
         .connecting { color: #f0b232; }
         .connected { color: var(--success); }
 
-        /* Chat Area Panel */
-        #chat-panel {
+        /* Mid-Call Media Controls */
+        .controls-container {
+            display: flex;
+            gap: 10px;
+            margin-top: 5px;
+        }
+        .controls-container button {
+            flex: 1;
+            padding: 10px;
+            font-size: 12px;
+        }
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: #a92b2f; }
+
+        /* Main Workspace */
+        #main-workspace {
             flex: 1;
             display: flex;
             flex-direction: column;
             background-color: var(--bg-primary);
+            height: 100%;
         }
 
+        /* Video Grid Dashboard */
+        #video-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 10px;
+            padding: 15px;
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid #3f4147;
+            max-height: 45%;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        #video-grid:empty { display: none; }
+
+        .video-wrapper {
+            position: relative;
+            background-color: #111;
+            border-radius: 8px;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+        }
+
+        video { width: 100%; height: 100%; object-fit: cover; }
+        .local-video { transform: scaleX(-1); }
+
+        .video-label {
+            position: absolute;
+            bottom: 8px;
+            left: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        /* Chat Layout */
         #messages {
             flex: 1;
             padding: 20px;
@@ -133,78 +205,25 @@
             gap: 16px;
         }
 
-        .message {
-            display: flex;
-            flex-direction: column;
-        }
+        .message { display: flex; flex-direction: column; }
+        .msg-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+        .username { font-weight: 600; color: #fff; }
+        .timestamp { font-size: 12px; color: var(--text-muted); }
+        .msg-text { color: var(--text-normal); word-break: break-word; line-height: 1.375rem; }
 
-        .msg-header {
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-
-        .username {
-            font-weight: 600;
-            color: #fff;
-        }
-
-        .timestamp {
-            font-size: 12px;
-            color: var(--text-muted);
-        }
-
-        .msg-text {
-            color: var(--text-normal);
-            word-break: break-word;
-            line-height: 1.375rem;
-        }
-
-        /* Input Area */
-        #input-area {
-            padding: 0 20px 24px 20px;
-        }
-
-        .input-wrapper {
-            background-color: #383a40;
-            border-radius: 8px;
-            padding: 11px 16px;
-        }
-
-        #msg-input {
-            width: 100%;
-            background: transparent;
-            border: none;
-            color: var(--text-normal);
-            font-size: 16px;
-            outline: none;
-        }
-
+        #input-area { padding: 0 20px 24px 20px; }
+        .input-wrapper { background-color: #383a40; border-radius: 8px; padding: 11px 16px; }
+        #msg-input { width: 100%; background: transparent; border: none; color: var(--text-normal); font-size: 16px; outline: none; }
         #msg-input::placeholder { color: var(--text-muted); }
 
         /* Responsive Mobile Layout */
         @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-            }
-
-            #setup-panel {
-                width: 100%;
-                height: auto;
-                border-right: none;
-                border-bottom: 1px solid #3f4147;
-                padding: 15px;
-                gap: 10px;
-            }
-
-            h3 { margin-top: 5px; }
+            body { flex-direction: column; }
+            #setup-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #3f4147; padding: 15px; gap: 10px; }
+            #video-grid { max-height: 35%; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); padding: 8px; gap: 6px; }
             #messages { padding: 15px; gap: 12px; }
             #input-area { padding: 0 12px 16px 12px; }
-
-            body.connected-layout #setup-panel {
-                display: none;
-            }
+            body.connected-layout #setup-panel { display: none; }
         }
     </style>
 </head>
@@ -217,28 +236,41 @@
         </div>
         <div id="status" class="status disconnected">Disconnected</div>
         
+        <div id="media-controls" class="controls-container" style="display: none;">
+            <button id="btn-toggle-mic">Mute Mic</button>
+            <button id="btn-toggle-cam">Cam Off</button>
+        </div>
+
         <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;">
 
         <h3>Your Name</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
 
-        <h3> Create a Room</h3>
+        <h3>Select Room Type</h3>
+        <div class="mode-container">
+            <button id="btn-mode-text" class="mode-btn active">💬 Text Chat</button>
+            <button id="btn-mode-video" class="mode-btn">📹 Video Call</button>
+        </div>
+
+        <h3>Option A: Create a Room</h3>
         <button id="btn-create">Generate 6-Digit Code</button>
         <div id="room-code-output" class="code-display" style="display:none;">------</div>
         
-        <h3> Join a Room</h3>
+        <h3>Option B: Join a Room</h3>
         <input type="text" id="room-code-input" placeholder="Enter 6-digit code" maxlength="6">
         <button id="btn-join" style="background-color: var(--success); margin-top: 5px;">Join Room</button>
     </div>
 
-    <div id="chat-panel">
+    <div id="main-workspace">
+        <div id="video-grid"></div>
+
         <div id="messages">
             <div class="message">
                 <div class="msg-header">
                     <span class="username" style="color: var(--brand);">System</span>
                     <span class="timestamp">Now</span>
                 </div>
-                <div class="msg-text">Welcome! Create or join a room. Up to 7+ users can link directly via a P2P WebRTC Mesh network.</div>
+                <div class="msg-text">Welcome! Choose between Text Chat or a full Video Call using the toggle buttons, then link up to 7+ users</div>
             </div>
         </div>
         <div id="input-area">
@@ -257,12 +289,12 @@
         };
 
         const mqttBroker = 'wss://broker.emqx.io:8084/mqtt'; 
-        
-        // מבנה נתונים שמחזיק את כל ה-Peers המחוברים: clientId -> { peerConnection, dataChannel, username }
         const peers = {}; 
         
         let mqttClient;
         let currentRoomTopic = '';
+        let localStream = null;
+        let selectedMode = 'text'; // 'text' או 'video'
         
         const myClientId = 'client_' + Math.floor(Math.random() * 10000000);
         let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
@@ -275,15 +307,46 @@
         const statusDiv = document.getElementById('status');
         const messagesDiv = document.getElementById('messages');
         const msgInput = document.getElementById('msg-input');
+        const videoGrid = document.getElementById('video-grid');
+        const mediaControls = document.getElementById('media-controls');
+        const btnToggleMic = document.getElementById('btn-toggle-mic');
+        const btnToggleCam = document.getElementById('btn-toggle-cam');
+        
+        const btnModeText = document.getElementById('btn-mode-text');
+        const btnModeVideo = document.getElementById('btn-mode-video');
 
         usernameInput.value = myUsername;
 
+        // שליטה על כפתורי בחירת המצב (Text / Video)
+        btnModeText.addEventListener('click', () => {
+            selectedMode = 'text';
+            btnModeText.classList.add('active');
+            btnModeVideo.classList.remove('active');
+        });
+
+        btnModeVideo.addEventListener('click', () => {
+            selectedMode = 'video';
+            btnModeVideo.classList.add('active');
+            btnModeText.classList.remove('active');
+        });
+
         function finalizeUsername() {
             const chosenName = usernameInput.value.trim();
-            if (chosenName !== "") {
-                myUsername = chosenName;
-            }
+            if (chosenName !== "") myUsername = chosenName;
             usernameInput.disabled = true;
+            btnModeText.disabled = true;
+            btnModeVideo.disabled = true;
+        }
+
+        async function setupLocalMedia() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                addVideoElement('local', `${myUsername} (You)`, localStream, true);
+                mediaControls.style.display = 'flex';
+            } catch (err) {
+                console.error("Error accessing media devices.", err);
+                alert("Could not access camera/microphone. Continuing in text-only mode.");
+            }
         }
 
         function connectSignaling(roomCode, callback) {
@@ -293,21 +356,16 @@
             mqttClient = mqtt.connect(mqttBroker);
             
             mqttClient.on('connect', () => {
-                mqttClient.subscribe(currentRoomTopic, () => {
-                    callback();
-                });
+                mqttClient.subscribe(currentRoomTopic, () => { callback(); });
             });
 
             mqttClient.on('message', async (topic, message) => {
                 try {
                     const packet = JSON.parse(message.toString());
-                    
-                    // סינון הודעות עצמיות והודעות שלא מיועדות אלינו (אם יש יעד מוגדר)
                     if (packet.clientId === myClientId) return;
                     if (packet.targetId && packet.targetId !== myClientId) return;
 
                     if (packet.type === 'join') {
-                        // משתמש חדש נכנס. אם ה-ID שלנו גדול משלו, ניזום אליו חיבור. אחרת, נשלח לו נוכחות והוא יזום אלינו.
                         if (myClientId > packet.clientId) {
                             initPeer(packet.clientId, packet.sender, true);
                         } else {
@@ -315,7 +373,6 @@
                         }
                     } 
                     else if (packet.type === 'presence') {
-                        // קיבלנו אישור נוכחות ממשתמש קיים. מכיוון שהגענו לפה רק אם ה-ID שלנו גדול משלו, ניזום אליו חיבור.
                         if (myClientId > packet.clientId) {
                             initPeer(packet.clientId, packet.sender, true);
                         }
@@ -337,20 +394,14 @@
                             try { await peers[packet.clientId].peerConnection.addIceCandidate(packet.data); } catch(e){}
                         }
                     }
-                } catch(e) {
-                    console.error("Signaling parsing error", e);
-                }
+                } catch(e) { console.error("Signaling error", e); }
             });
         }
 
         function sendSignal(type, data, targetId = null) {
             if (mqttClient && mqttClient.connected) {
                 const payload = JSON.stringify({ 
-                    clientId: myClientId, 
-                    sender: myUsername, 
-                    type: type, 
-                    data: data,
-                    targetId: targetId 
+                    clientId: myClientId, sender: myUsername, type: type, data: data, targetId: targetId 
                 });
                 mqttClient.publish(currentRoomTopic, payload);
             }
@@ -360,24 +411,27 @@
             if (peers[targetId]) return peers[targetId].peerConnection;
 
             const pc = new RTCPeerConnection(rtcConfig);
-            peers[targetId] = {
-                peerConnection: pc,
-                username: targetUsername,
-                dataChannel: null
+            peers[targetId] = { peerConnection: pc, username: targetUsername, dataChannel: null, stream: null };
+
+            // יוסיף את הזרם המקומי לחיבור רק אם נבחר מצב וידאו והמצלמה הופעלה
+            if (localStream) {
+                localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+            }
+
+            pc.ontrack = (event) => {
+                if (!peers[targetId].stream) {
+                    peers[targetId].stream = event.streams[0];
+                    addVideoElement(targetId, targetUsername, event.streams[0], false);
+                }
             };
 
             pc.onicecandidate = (event) => {
-                if (event.candidate) {
-                    sendSignal('ice', event.candidate, targetId);
-                }
+                if (event.candidate) sendSignal('ice', event.candidate, targetId);
             };
 
             pc.onconnectionstatechange = () => {
-                if(pc.connectionState === 'connected') {
-                    updateRoomStatus();
-                } else if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-                    handlePeerDisconnect(targetId);
-                }
+                if (pc.connectionState === 'connected') updateRoomStatus();
+                else if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) handlePeerDisconnect(targetId);
             };
 
             if (isInitiator) {
@@ -385,11 +439,8 @@
                 peers[targetId].dataChannel = dc;
                 setupDataChannelHandlers(dc, targetId, targetUsername);
 
-                pc.createOffer().then(offer => {
-                    return pc.setLocalDescription(offer);
-                }).then(() => {
-                    sendSignal('offer', pc.localDescription, targetId);
-                });
+                pc.createOffer().then(offer => pc.setLocalDescription(offer))
+                                .then(() => sendSignal('offer', pc.localDescription, targetId));
             } else {
                 pc.ondatachannel = (event) => {
                     const dc = event.channel;
@@ -402,14 +453,8 @@
         }
 
         function setupDataChannelHandlers(dc, targetId, targetUsername) {
-            dc.onopen = () => {
-                updateRoomStatus();
-            };
-
-            dc.onclose = () => {
-                handlePeerDisconnect(targetId);
-            };
-
+            dc.onopen = () => updateRoomStatus();
+            dc.onclose = () => handlePeerDisconnect(targetId);
             dc.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 appendMessage(data.user, data.text, false);
@@ -421,7 +466,38 @@
                 try { peers[targetId].peerConnection.close(); } catch(e){}
                 delete peers[targetId];
             }
+            removeVideoElement(targetId);
             updateRoomStatus();
+        }
+
+        function addVideoElement(id, labelText, stream, isLocal) {
+            if (document.getElementById(`video-wrap-${id}`)) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.id = `video-wrap-${id}`;
+            wrapper.className = 'video-wrapper';
+
+            const video = document.createElement('video');
+            video.srcObject = stream;
+            video.autoplay = true;
+            video.playsInline = true;
+            if (isLocal) {
+                video.muted = true; 
+                video.classList.add('local-video');
+            }
+
+            const label = document.createElement('div');
+            label.className = 'video-label';
+            label.textContent = labelText;
+
+            wrapper.appendChild(video);
+            wrapper.appendChild(label);
+            videoGrid.appendChild(wrapper);
+        }
+
+        function removeVideoElement(id) {
+            const wrapper = document.getElementById(`video-wrap-${id}`);
+            if (wrapper) wrapper.remove();
         }
 
         function updateRoomStatus(forcedState, forcedText) {
@@ -431,15 +507,12 @@
                 return;
             }
 
-            // ספירת חיבורי ה-P2P הפעילים ברשת ה-Mesh
             let connectedCount = 0;
             for (let id in peers) {
-                if (peers[id].dataChannel && peers[id].dataChannel.readyState === 'open') {
-                    connectedCount++;
-                }
+                if (peers[id].dataChannel && peers[id].dataChannel.readyState === 'open') connectedCount++;
             }
 
-            if (connectedCount > 0) {
+            if (connectedCount > 0 || localStream) {
                 statusDiv.className = "status connected";
                 statusDiv.textContent = `Connected (${connectedCount + 1} users in room)`;
                 msgInput.removeAttribute('disabled');
@@ -453,8 +526,10 @@
             }
         }
 
-        btnCreate.addEventListener('click', () => {
+        btnCreate.addEventListener('click', async () => {
             finalizeUsername();
+            if (selectedMode === 'video') await setupLocalMedia();
+            
             const generatedCode = Math.floor(100000 + Math.random() * 900000).toString(); 
             roomCodeOutput.textContent = generatedCode;
             roomCodeOutput.style.display = 'block';
@@ -467,18 +542,42 @@
             });
         });
 
-        btnJoin.addEventListener('click', () => {
+        btnJoin.addEventListener('click', async () => {
             const code = roomCodeInput.value.trim();
             if (code.length !== 6 || isNaN(code)) return alert("Please enter a valid 6-digit room code.");
 
             finalizeUsername();
+            if (selectedMode === 'video') await setupLocalMedia();
+            
             btnCreate.disabled = true;
             btnJoin.disabled = true;
 
             connectSignaling(code, () => {
-                updateRoomStatus('connecting', 'Joining mesh room...');
-                sendSignal('join', null); // מכריז לכולם בחדר שמישהו חדש נכנס
+                updateRoomStatus('connecting', 'Joining mesh...');
+                sendSignal('join', null);
             });
+        });
+
+        btnToggleMic.addEventListener('click', () => {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                if (audioTrack) {
+                    audioTrack.enabled = !audioTrack.enabled;
+                    btnToggleMic.textContent = audioTrack.enabled ? "Mute Mic" : "Unmute Mic";
+                    btnToggleMic.classList.toggle('btn-danger', !audioTrack.enabled);
+                }
+            }
+        });
+
+        btnToggleCam.addEventListener('click', () => {
+            if (localStream) {
+                const videoTrack = localStream.getVideoTracks()[0];
+                if (videoTrack) {
+                    videoTrack.enabled = !videoTrack.enabled;
+                    btnToggleCam.textContent = videoTrack.enabled ? "Cam Off" : "Cam On";
+                    btnToggleCam.classList.toggle('btn-danger', !videoTrack.enabled);
+                }
+            }
         });
 
         msgInput.addEventListener('keydown', (e) => {
@@ -487,13 +586,11 @@
                 const payload = { user: myUsername, text: text };
                 const stringPayload = JSON.stringify(payload);
                 
-                // שליחת ההודעה לכל המשתמשים ברשת ה-Mesh
                 for (let id in peers) {
                     if (peers[id].dataChannel && peers[id].dataChannel.readyState === 'open') {
                         peers[id].dataChannel.send(stringPayload);
                     }
                 }
-                
                 appendMessage(myUsername, text, true);
                 msgInput.value = '';
             }
