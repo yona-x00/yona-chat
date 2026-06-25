@@ -89,6 +89,9 @@
             color: var(--text-muted);
             padding: 10px;
             font-size: 13px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
         }
         .mode-btn.active {
             background-color: var(--brand);
@@ -133,20 +136,6 @@
         .disconnected { color: #f23f43; }
         .connecting { color: #f0b232; }
         .connected { color: var(--success); }
-
-        /* Mid-Call Media Controls */
-        .controls-container {
-            display: flex;
-            gap: 10px;
-            margin-top: 5px;
-        }
-        .controls-container button {
-            flex: 1;
-            padding: 10px;
-            font-size: 12px;
-        }
-        .btn-danger { background-color: var(--danger); }
-        .btn-danger:hover { background-color: #a92b2f; }
 
         /* Main Workspace */
         #main-workspace {
@@ -195,6 +184,34 @@
             font-weight: 600;
         }
 
+        /* Mobile Action Bar - Dedicated Video Call Controls (Visible everywhere!) */
+        .controls-container {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            padding: 12px;
+            background-color: var(--bg-tertiary);
+            border-bottom: 1px solid #3f4147;
+            box-sizing: border-box;
+        }
+        
+        .control-btn {
+            flex: 1;
+            max-width: 160px;
+            padding: 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 24px; /* עיצוב עגול ונוח למובייל */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        
+        .btn-danger { background-color: var(--danger); }
+        .btn-danger:hover { background-color: #a92b2f; }
+
         /* Chat Layout */
         #messages {
             flex: 1;
@@ -223,6 +240,8 @@
             #video-grid { max-height: 35%; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); padding: 8px; gap: 6px; }
             #messages { padding: 15px; gap: 12px; }
             #input-area { padding: 0 12px 16px 12px; }
+            
+            /* מעלים את פאנל ההגדרות לחלוטין במובייל כדי לפנות את כל המסך לשיחה */
             body.connected-layout #setup-panel { display: none; }
         }
     </style>
@@ -235,15 +254,10 @@
             <h2>yona chat</h2>
         </div>
         <div id="status" class="status disconnected">Disconnected</div>
-        
-        <div id="media-controls" class="controls-container" style="display: none;">
-            <button id="btn-toggle-mic">Mute Mic</button>
-            <button id="btn-toggle-cam">Cam Off</button>
-        </div>
 
         <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;">
 
-        <h3>Your Name</h3>
+        <h3>Your name</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
 
         <h3>Select Room Type</h3>
@@ -252,11 +266,11 @@
             <button id="btn-mode-video" class="mode-btn">📹 Video Call</button>
         </div>
 
-        <h3>Option A: Create a Room</h3>
+        <h3> Create a Room</h3>
         <button id="btn-create">Generate 6-Digit Code</button>
         <div id="room-code-output" class="code-display" style="display:none;">------</div>
         
-        <h3>Option B: Join a Room</h3>
+        <h3> Join a Room</h3>
         <input type="text" id="room-code-input" placeholder="Enter 6-digit code" maxlength="6">
         <button id="btn-join" style="background-color: var(--success); margin-top: 5px;">Join Room</button>
     </div>
@@ -264,13 +278,18 @@
     <div id="main-workspace">
         <div id="video-grid"></div>
 
+        <div id="media-controls" class="controls-container" style="display: none;">
+            <button id="btn-toggle-mic" class="control-btn">🎤 Mute Mic</button>
+            <button id="btn-toggle-cam" class="control-btn">📷 Cam Off</button>
+        </div>
+
         <div id="messages">
             <div class="message">
                 <div class="msg-header">
                     <span class="username" style="color: var(--brand);">System</span>
                     <span class="timestamp">Now</span>
                 </div>
-                <div class="msg-text">Welcome! Choose between Text Chat or a full Video Call using the toggle buttons, then link up to 7+ users</div>
+                <div class="msg-text">Welcome! Choose between Text Chat or a full Video Call using the toggle buttons, then link up to 7+ users via P2P Mesh. Controls work perfectly on mobile screens!</div>
             </div>
         </div>
         <div id="input-area">
@@ -294,7 +313,7 @@
         let mqttClient;
         let currentRoomTopic = '';
         let localStream = null;
-        let selectedMode = 'text'; // 'text' או 'video'
+        let selectedMode = 'text'; 
         
         const myClientId = 'client_' + Math.floor(Math.random() * 10000000);
         let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
@@ -317,7 +336,6 @@
 
         usernameInput.value = myUsername;
 
-        // שליטה על כפתורי בחירת המצב (Text / Video)
         btnModeText.addEventListener('click', () => {
             selectedMode = 'text';
             btnModeText.classList.add('active');
@@ -342,7 +360,7 @@
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 addVideoElement('local', `${myUsername} (You)`, localStream, true);
-                mediaControls.style.display = 'flex';
+                mediaControls.style.display = 'flex'; // מציג את הבר העליון במובייל ובדסקטופ
             } catch (err) {
                 console.error("Error accessing media devices.", err);
                 alert("Could not access camera/microphone. Continuing in text-only mode.");
@@ -413,7 +431,6 @@
             const pc = new RTCPeerConnection(rtcConfig);
             peers[targetId] = { peerConnection: pc, username: targetUsername, dataChannel: null, stream: null };
 
-            // יוסיף את הזרם המקומי לחיבור רק אם נבחר מצב וידאו והמצלמה הופעלה
             if (localStream) {
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
             }
@@ -558,12 +575,13 @@
             });
         });
 
+        // כפתורי מיוט ומצלמה מעודכנים דינמית למובייל
         btnToggleMic.addEventListener('click', () => {
             if (localStream) {
                 const audioTrack = localStream.getAudioTracks()[0];
                 if (audioTrack) {
                     audioTrack.enabled = !audioTrack.enabled;
-                    btnToggleMic.textContent = audioTrack.enabled ? "Mute Mic" : "Unmute Mic";
+                    btnToggleMic.textContent = audioTrack.enabled ? "🎤 Mute Mic" : "🎙️ Unmute Mic";
                     btnToggleMic.classList.toggle('btn-danger', !audioTrack.enabled);
                 }
             }
@@ -574,7 +592,7 @@
                 const videoTrack = localStream.getVideoTracks()[0];
                 if (videoTrack) {
                     videoTrack.enabled = !videoTrack.enabled;
-                    btnToggleCam.textContent = videoTrack.enabled ? "Cam Off" : "Cam On";
+                    btnToggleCam.textContent = videoTrack.enabled ? "📷 Cam Off" : "🎥 Cam On";
                     btnToggleCam.classList.toggle('btn-danger', !videoTrack.enabled);
                 }
             }
