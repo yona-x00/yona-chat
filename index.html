@@ -195,10 +195,10 @@
         
         .control-btn {
             flex: 1;
-            min-width: 90px;
-            max-width: 140px;
-            padding: 12px 8px;
-            font-size: 12px;
+            min-width: 85px;
+            max-width: 130px;
+            padding: 12px 4px;
+            font-size: 11px;
             font-weight: bold;
             border-radius: 24px; 
             display: flex;
@@ -292,6 +292,7 @@
             <button id="btn-toggle-mic" class="control-btn">🎤 Mute Mic</button>
             <button id="btn-toggle-cam" class="control-btn">📷 Cam Off</button>
             <button id="btn-switch-cam" class="control-btn">🔄 Switch Cam</button>
+            <button id="btn-share-screen" class="control-btn">🖥️ Share Screen</button>
         </div>
 
         <div id="messages">
@@ -324,8 +325,10 @@
         let mqttClient;
         let currentRoomTopic = '';
         let localStream = null;
+        let screenStream = null;
         let selectedMode = 'text'; 
         let currentFacingMode = 'user'; 
+        let isSharingScreen = false;
         
         const myClientId = 'client_' + Math.floor(Math.random() * 10000000);
         let myUsername = 'User_' + Math.floor(Math.random() * 9000 + 1000);
@@ -343,6 +346,7 @@
         const btnToggleMic = document.getElementById('btn-toggle-mic');
         const btnToggleCam = document.getElementById('btn-toggle-cam');
         const btnSwitchCam = document.getElementById('btn-switch-cam');
+        const btnShareScreen = document.getElementById('btn-share-screen');
         
         const btnModeText = document.getElementById('btn-mode-text');
         const btnModeVideo = document.getElementById('btn-mode-video');
@@ -516,7 +520,7 @@
             video.playsInline = true;
             if (isLocal) {
                 video.muted = true; 
-                if (currentFacingMode === 'user') {
+                if (currentFacingMode === 'user' && !isSharingScreen) {
                     video.classList.add('local-video');
                 }
             }
@@ -617,51 +621,54 @@
                     videoTrack.enabled = !videoTrack.enabled;
                     btnToggleCam.textContent = videoTrack.enabled ? "📷 Cam Off" : "🎥 Cam On";
                     btnToggleCam.classList.toggle('btn-danger', !videoTrack.enabled);
-                    btnSwitchCam.style.display = videoTrack.enabled ? 'flex' : 'none';
+                    
+                    if (!isSharingScreen) {
+                        btnSwitchCam.style.display = videoTrack.enabled ? 'flex' : 'none';
+                    }
+                    btnShareScreen.style.display = videoTrack.enabled ? 'flex' : 'none';
                 }
             }
         });
 
-        
-        btnSwitchCam.addEventListener('click', async () => {
-            if (!localStream) return;
+        // פונקציית עזר להחלפת ה-Track אצל כל חברי ה-Mesh בבת אחת
+        async function replaceLocalVideoTrack(newTrack) {
+            const oldTrack = localStream.getVideoTracks()[0];
+            if (oldTrack) {
+                oldTrack.stop();
+                localStream.removeTrack(oldTrack);
+            }
+            localStream.addTrack(newTrack);
 
-            
+            for (let id in peers) {
+                const pc = peers[id].peerConnection;
+                const senders = pc.getSenders();
+                const videoSender = senders.find(sender => sender.track && sender.track.kind === 'video');
+                if (videoSender) {
+                    await videoSender.replaceTrack(newTrack);
+                }
+            }
+        }
+
+        btnSwitchCam.addEventListener('click', async () => {
+            if (!localStream || isSharingScreen) return;
+
             currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
 
-          
-            const oldVideoTrack = localStream.getVideoTracks()[0];
-            if (oldVideoTrack) oldVideoTrack.stop();
-
             try {
-                
                 const newStream = await navigator.mediaDevices.getUserMedia({
                     video: { facingMode: currentFacingMode }
                 });
                 const newVideoTrack = newStream.getVideoTracks()[0];
 
-            
-                localStream.removeTrack(oldVideoTrack);
-                localStream.addTrack(newVideoTrack);
+                await replaceLocalVideoTrack(newVideoTrack);
 
                 const localVideoElem = document.querySelector('#video-wrap-local video');
                 if (localVideoElem) {
                     localVideoElem.srcObject = localStream;
-                   
                     if (currentFacingMode === 'user') {
                         localVideoElem.classList.add('local-video');
                     } else {
                         localVideoElem.classList.remove('local-video');
-                    }
-                }
-
-                
-                for (let id in peers) {
-                    const pc = peers[id].peerConnection;
-                    const senders = pc.getSenders();
-                    const videoSender = senders.find(sender => sender.track && sender.track.kind === 'video');
-                    if (videoSender) {
-                        await videoSender.replaceTrack(newVideoTrack);
                     }
                 }
             } catch (err) {
@@ -669,6 +676,78 @@
                 alert("Could not switch camera source.");
             }
         });
+
+       
+        btnShareScreen.addEventListener('click', async () => {
+            if (!localStream) return;
+
+            if (!isSharingScreen) {
+                try {
+                    
+                    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+                    const screenTrack = screenStream.getVideoTracks()[0];
+
+                    
+                    screenTrack.onended = () => {
+                        stopScreenSharing();
+                    };
+
+                    await replaceLocalVideoTrack(screenTrack);
+
+                    
+                    const localVideoElem = document.querySelector('#video-wrap-local video');
+                    if (localVideoElem) {
+                        localVideoElem.srcObject = localStream;
+                        localVideoElem.classList.remove('local-video');
+                    }
+
+                    isSharingScreen = true;
+                    btnShareScreen.textContent = "🛑 Stop Share";
+                    btnShareScreen.classList.add('btn-danger');
+                    btnSwitchCam.style.display = 'none'; // אין טעם להחליף מצלמה בזמן שיתוף מסך
+
+                } catch (err) {
+                    console.error("Error standard screen sharing initialization:", err);
+                }
+            } else {
+                await stopScreenSharing();
+            }
+        });
+
+       
+        async function stopScreenSharing() {
+            if (!isSharingScreen) return;
+
+            if (screenStream) {
+                screenStream.getTracks().forEach(track => track.stop());
+            }
+
+            try {
+                
+                const camStream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: currentFacingMode }
+                });
+                const camTrack = camStream.getVideoTracks()[0];
+
+                await replaceLocalVideoTrack(camTrack);
+
+                const localVideoElem = document.querySelector('#video-wrap-local video');
+                if (localVideoElem) {
+                    localVideoElem.srcObject = localStream;
+                    if (currentFacingMode === 'user') {
+                        localVideoElem.classList.add('local-video');
+                    }
+                }
+
+                isSharingScreen = false;
+                btnShareScreen.textContent = "🖥️ Share Screen";
+                btnShareScreen.classList.remove('btn-danger');
+                btnSwitchCam.style.display = 'flex';
+
+            } catch (err) {
+                console.error("Failed to recover camera track:", err);
+            }
+        }
 
         msgInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && msgInput.value.trim() !== '') {
