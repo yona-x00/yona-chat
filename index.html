@@ -29,7 +29,7 @@
             overflow: hidden;
         }
 
-        /* Setup / Connection Panel */
+        
         #setup-panel {
             width: 320px;
             background-color: var(--bg-tertiary);
@@ -40,6 +40,7 @@
             border-right: 1px solid #3f4147;
             box-sizing: border-box;
             flex-shrink: 0;
+            overflow-y: auto; 
         }
 
         .header-container {
@@ -77,7 +78,7 @@
         
         input[type="text"]:focus { border-color: var(--brand); }
 
-        /* Mode Selector Buttons */
+        
         .mode-container {
             display: flex;
             gap: 10px;
@@ -137,7 +138,7 @@
         .connecting { color: #f0b232; }
         .connected { color: var(--success); }
 
-        /* Main Workspace */
+        
         #main-workspace {
             flex: 1;
             display: flex;
@@ -146,7 +147,7 @@
             height: 100%;
         }
 
-        /* Video Grid Dashboard */
+        
         #video-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -184,7 +185,7 @@
             font-weight: 600;
         }
 
-        /* Mobile Action Bar - Dedicated Video Call Controls (Visible everywhere!) */
+        
         .controls-container {
             display: flex;
             justify-content: center;
@@ -193,6 +194,7 @@
             background-color: var(--bg-tertiary);
             border-bottom: 1px solid #3f4147;
             box-sizing: border-box;
+            z-index: 99;
         }
         
         .control-btn {
@@ -201,18 +203,21 @@
             padding: 12px;
             font-size: 14px;
             font-weight: bold;
-            border-radius: 24px; /* עיצוב עגול ונוח למובייל */
+            border-radius: 24px; 
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            background-color: #4e5058;
+            color: white;
+            border: none;
+            cursor: pointer;
         }
         
-        .btn-danger { background-color: var(--danger); }
-        .btn-danger:hover { background-color: #a92b2f; }
+        .btn-danger { background-color: var(--danger) !important; }
 
-        /* Chat Layout */
+        
         #messages {
             flex: 1;
             padding: 20px;
@@ -233,15 +238,27 @@
         #msg-input { width: 100%; background: transparent; border: none; color: var(--text-normal); font-size: 16px; outline: none; }
         #msg-input::placeholder { color: var(--text-muted); }
 
-        /* Responsive Mobile Layout */
+        
         @media (max-width: 768px) {
             body { flex-direction: column; }
             #setup-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #3f4147; padding: 15px; gap: 10px; }
-            #video-grid { max-height: 35%; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); padding: 8px; gap: 6px; }
+            
+            
+            #video-grid { max-height: 35vh; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); padding: 8px; gap: 6px; }
+            
+            
+            body.video-active #video-grid {
+                height: 55vh;
+                max-height: 55vh;
+            }
+            body.video-active #messages {
+                flex: 1;
+            }
+
             #messages { padding: 15px; gap: 12px; }
             #input-area { padding: 0 12px 16px 12px; }
             
-            /* מעלים את פאנל ההגדרות לחלוטין במובייל כדי לפנות את כל המסך לשיחה */
+           
             body.connected-layout #setup-panel { display: none; }
         }
     </style>
@@ -257,7 +274,7 @@
 
         <hr style="border: 0; border-top: 1px solid #3f4147; width: 100%; margin: 5px 0;">
 
-        <h3>Your name</h3>
+        <h3>Your Name</h3>
         <input type="text" id="username-input" placeholder="Enter your username...">
 
         <h3>Select Room Type</h3>
@@ -289,7 +306,7 @@
                     <span class="username" style="color: var(--brand);">System</span>
                     <span class="timestamp">Now</span>
                 </div>
-                <div class="msg-text">Welcome! Choose between Text Chat or a full Video Call using the toggle buttons, then link up to 7+ users via P2P Mesh. Controls work perfectly on mobile screens!</div>
+                <div class="msg-text">Welcome! to yona chat to start a coversation</div>
             </div>
         </div>
         <div id="input-area">
@@ -357,13 +374,14 @@
         }
 
         async function setupLocalMedia() {
+          
+            mediaControls.style.display = 'flex'; 
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
                 addVideoElement('local', `${myUsername} (You)`, localStream, true);
-                mediaControls.style.display = 'flex'; // מציג את הבר העליון במובייל ובדסקטופ
             } catch (err) {
                 console.error("Error accessing media devices.", err);
-                alert("Could not access camera/microphone. Continuing in text-only mode.");
+                alert("Camera blocked or HTTP insecure environment. Buttons are visible, but devices won't broadcast without HTTPS or localhost.");
             }
         }
 
@@ -529,7 +547,7 @@
                 if (peers[id].dataChannel && peers[id].dataChannel.readyState === 'open') connectedCount++;
             }
 
-            if (connectedCount > 0 || localStream) {
+            if (connectedCount > 0 || localStream || selectedMode === 'video') {
                 statusDiv.className = "status connected";
                 statusDiv.textContent = `Connected (${connectedCount + 1} users in room)`;
                 msgInput.removeAttribute('disabled');
@@ -545,7 +563,10 @@
 
         btnCreate.addEventListener('click', async () => {
             finalizeUsername();
-            if (selectedMode === 'video') await setupLocalMedia();
+            if (selectedMode === 'video') {
+                document.body.classList.add('video-active'); 
+                await setupLocalMedia();
+            }
             
             const generatedCode = Math.floor(100000 + Math.random() * 900000).toString(); 
             roomCodeOutput.textContent = generatedCode;
@@ -564,7 +585,10 @@
             if (code.length !== 6 || isNaN(code)) return alert("Please enter a valid 6-digit room code.");
 
             finalizeUsername();
-            if (selectedMode === 'video') await setupLocalMedia();
+            if (selectedMode === 'video') {
+                document.body.classList.add('video-active'); 
+                await setupLocalMedia();
+            }
             
             btnCreate.disabled = true;
             btnJoin.disabled = true;
@@ -575,7 +599,6 @@
             });
         });
 
-        // כפתורי מיוט ומצלמה מעודכנים דינמית למובייל
         btnToggleMic.addEventListener('click', () => {
             if (localStream) {
                 const audioTrack = localStream.getAudioTracks()[0];
