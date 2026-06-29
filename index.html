@@ -175,6 +175,7 @@
             flex-direction: column;
             background-color: var(--bg-primary);
             height: 100%;
+            position: relative;
         }
 
         #video-grid {
@@ -187,20 +188,56 @@
             max-height: 45%;
             overflow-y: auto;
             box-sizing: border-box;
+            transition: all 0.3s ease;
         }
 
         #video-grid:empty { display: none; }
 
+        #video-grid.has-pinned {
+            grid-template-columns: repeat(6, 1fr) !important;
+        }
+        
         .video-wrapper {
             position: relative;
             background-color: #111;
             border-radius: 8px;
             overflow: hidden;
             aspect-ratio: 16 / 9;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: border 0.2s, box-shadow 0.2s;
+        }
+
+        #video-grid.has-pinned .video-wrapper {
+            grid-column: span 1;
+        }
+
+        #video-grid.has-pinned .video-wrapper.pinned {
+            grid-column: span 5;
+            grid-row: span 3;
+            aspect-ratio: auto;
+            min-height: 260px;
+            border: 2px solid var(--brand);
         }
 
         video { width: 100%; height: 100%; object-fit: cover; }
         .local-video { transform: scaleX(-1); }
+
+        .video-wrapper:fullscreen {
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            aspect-ratio: auto !important;
+        }
+        .video-wrapper:-webkit-full-screen {
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            aspect-ratio: auto !important;
+        }
 
         .video-label {
             position: absolute;
@@ -212,7 +249,15 @@
             border-radius: 4px;
             font-size: 12px;
             font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            z-index: 2147483647;
         }
+
+        .pin-indicator, .mute-indicator { display: none; }
+        .video-wrapper.pinned .pin-indicator { display: inline; }
+        .video-wrapper.muted .mute-indicator { display: inline; }
 
         .controls-container {
             display: flex;
@@ -247,6 +292,80 @@
         }
         
         .btn-danger { background-color: var(--danger) !important; }
+
+        .user-modal {
+            position: absolute;
+            bottom: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 290px;
+            max-height: 250px;
+            background-color: var(--bg-tertiary);
+            border: 1px solid #3f4147;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            display: none;
+            flex-direction: column;
+            z-index: 1000;
+            overflow: hidden;
+        }
+
+        .user-modal-header {
+            padding: 10px 14px;
+            background-color: #111;
+            font-size: 12px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-modal-close {
+            cursor: pointer;
+            color: #fff;
+            font-size: 14px;
+        }
+
+        .user-modal-content {
+            padding: 8px;
+            overflow-y: auto;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .user-list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: var(--bg-secondary);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .user-list-name {
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 150px;
+        }
+
+        .mute-user-btn {
+            padding: 4px 8px;
+            font-size: 11px;
+            border-radius: 4px;
+            font-weight: bold;
+            background-color: #4e5058;
+        }
+
+        .mute-user-btn.is-muted {
+            background-color: var(--danger);
+        }
 
         #messages {
             flex: 1;
@@ -294,11 +413,13 @@
             body { flex-direction: column; }
             #setup-panel { width: 100%; height: auto; border-right: none; border-bottom: 1px solid #3f4147; padding: 15px; gap: 10px; }
             
-            #video-grid { max-height: 35vh; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); padding: 8px; gap: 6px; }
-            
+            #video-grid { max-height: 40vh; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); padding: 8px; gap: 6px; }
+            #video-grid.has-pinned { grid-template-columns: repeat(3, 1fr) !important; }
+            #video-grid.has-pinned .video-wrapper.pinned { grid-column: span 2; grid-row: span 2; min-height: 160px; }
+
             body.video-active #video-grid {
-                height: 55vh;
-                max-height: 55vh;
+                height: 50vh;
+                max-height: 50vh;
             }
             body.video-active #messages {
                 flex: 1;
@@ -362,9 +483,18 @@
     <div id="main-workspace">
         <div id="video-grid"></div>
 
+        <div id="user-list-modal" class="user-modal">
+            <div class="user-modal-header">
+                <span>Room Users</span>
+                <span id="user-modal-close-btn" class="user-modal-close">✕</span>
+            </div>
+            <div id="user-modal-list-container" class="user-modal-content"></div>
+        </div>
+
         <div id="media-controls" class="controls-container" style="display: none;">
             <button id="btn-toggle-mic" class="control-btn">🎤 Mute Mic</button>
             <button id="btn-toggle-cam" class="control-btn">📷 Cam Off</button>
+            <button id="btn-open-users-menu" class="control-btn">🔊 Mute Users</button>
             <button id="btn-switch-cam" class="control-btn">🔄 Switch Cam</button>
             <button id="btn-share-screen" class="control-btn">🖥️ Share Screen</button>
         </div>
@@ -377,7 +507,7 @@
                         <span class="username" style="color: var(--brand);">System</span>
                         <span class="timestamp">Now</span>
                     </div>
-                    <div class="msg-text">Welcome to yona chat! Connect to a room to start a conversation.</div>
+                    <div class="msg-text">Welcome to yona chat! <br><small style="color:var(--text-muted)">Tip: Double click to pin a camera tile. Rapidly click 4 times to enter native fullscreen view!</small></div>
                 </div>
             </div>
         </div>
@@ -424,6 +554,10 @@
         const mediaControls = document.getElementById('media-controls');
         const btnToggleMic = document.getElementById('btn-toggle-mic');
         const btnToggleCam = document.getElementById('btn-toggle-cam');
+        const btnOpenUsersMenu = document.getElementById('btn-open-users-menu');
+        const userListModal = document.getElementById('user-list-modal');
+        const userModalCloseBtn = document.getElementById('user-modal-close-btn');
+        const userModalListContainer = document.getElementById('user-modal-list-container');
         const btnSwitchCam = document.getElementById('btn-switch-cam');
         const btnShareScreen = document.getElementById('btn-share-screen');
         
@@ -550,7 +684,7 @@
             if (peers[targetId]) return peers[targetId].peerConnection;
 
             const pc = new RTCPeerConnection(rtcConfig);
-            peers[targetId] = { peerConnection: pc, username: targetUsername, dataChannel: null, stream: null };
+            peers[targetId] = { peerConnection: pc, username: targetUsername, dataChannel: null, stream: null, isMuted: false };
 
             if (localStream) {
                 localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
@@ -560,6 +694,7 @@
                 if (!peers[targetId].stream) {
                     peers[targetId].stream = event.streams[0];
                     addVideoElement(targetId, targetUsername, event.streams[0], false);
+                    renderUserListModal();
                 }
             };
 
@@ -591,7 +726,10 @@
         }
 
         function setupDataChannelHandlers(dc, targetId, targetUsername) {
-            dc.onopen = () => updateRoomStatus();
+            dc.onopen = () => {
+                updateRoomStatus();
+                renderUserListModal();
+            };
             dc.onclose = () => handlePeerDisconnect(targetId);
             dc.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -606,6 +744,7 @@
             }
             removeVideoElement(targetId);
             updateRoomStatus();
+            renderUserListModal();
         }
 
         function addVideoElement(id, labelText, stream, isLocal) {
@@ -628,16 +767,134 @@
 
             const label = document.createElement('div');
             label.className = 'video-label';
-            label.textContent = labelText;
+            label.innerHTML = `<span class="pin-indicator">📌 </span><span class="mute-indicator">🔇 </span><span>${labelText}</span>`;
 
             wrapper.appendChild(video);
             wrapper.appendChild(label);
             videoGrid.appendChild(wrapper);
+
+            
+            let clickCount = 0;
+            let clickTimer = null;
+
+            wrapper.addEventListener('click', (e) => {
+                clickCount++;
+                
+                if (clickTimer) clearTimeout(clickTimer);
+                
+                clickTimer = setTimeout(() => {
+                    if (clickCount === 2) {
+                        togglePinElement(wrapper);
+                    } else if (clickCount === 4) {
+                        toggleFullScreenElement(wrapper);
+                    }
+                    clickCount = 0;
+                }, 350); 
+            });
+        }
+
+        function togglePinElement(element) {
+            const isCurrentlyPinned = element.classList.contains('pinned');
+            document.querySelectorAll('.video-wrapper').forEach(el => el.classList.remove('pinned'));
+            videoGrid.classList.remove('has-pinned');
+
+            if (!isCurrentlyPinned) {
+                element.classList.add('pinned');
+                videoGrid.classList.add('has-pinned');
+            }
+        }
+
+        function toggleFullScreenElement(element) {
+            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+                if (element.requestFullscreen) {
+                    element.requestFullscreen();
+                } else if (element.webkitRequestFullscreen) {
+                    element.webkitRequestFullscreen();
+                }
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                } else if (document.webkitExitFullscreen) {
+                    document.webkitExitFullscreen();
+                }
+            }
         }
 
         function removeVideoElement(id) {
             const wrapper = document.getElementById(`video-wrap-${id}`);
-            if (wrapper) wrapper.remove();
+            if (wrapper) {
+                if (wrapper.classList.contains('pinned')) {
+                    videoGrid.classList.remove('has-pinned');
+                }
+                wrapper.remove();
+            }
+        }
+
+        btnOpenUsersMenu.addEventListener('click', () => {
+            if (userListModal.style.display === 'flex') {
+                userListModal.style.display = 'none';
+            } else {
+                renderUserListModal();
+                userListModal.style.display = 'flex';
+            }
+        });
+
+        userModalCloseBtn.addEventListener('click', () => {
+            userListModal.style.display = 'none';
+        });
+
+        function renderUserListModal() {
+            userModalListContainer.innerHTML = '';
+
+            const localItem = document.createElement('div');
+            localItem.className = 'user-list-item';
+            localItem.innerHTML = `
+                <span class="user-list-name">👑 ${myUsername} (You)</span>
+                <span style="font-size:11px; color:var(--text-muted);">Local Feed</span>
+            `;
+            userModalListContainer.appendChild(localItem);
+
+            let holdsRemotePeers = false;
+            for (let id in peers) {
+                holdsRemotePeers = true;
+                const peerData = peers[id];
+                
+                const item = document.createElement('div');
+                item.className = 'user-list-item';
+
+                const nameSpan = document.createElement('span');
+                nameSpan.className = 'user-list-name';
+                nameSpan.textContent = peerData.username;
+
+                const muteBtn = document.createElement('button');
+                muteBtn.className = `mute-user-btn ${peerData.isMuted ? 'is-muted' : ''}`;
+                muteBtn.textContent = peerData.isMuted ? "🔇 Unmute" : "🔊 Mute";
+                
+                muteBtn.onclick = () => {
+                    peerData.isMuted = !peerData.isMuted;
+                    
+                    const videoWrapper = document.getElementById(`video-wrap-${id}`);
+                    if (videoWrapper) {
+                        const videoEl = videoWrapper.querySelector('video');
+                        if (videoEl) videoEl.muted = peerData.isMuted;
+                        videoWrapper.classList.toggle('muted', peerData.isMuted);
+                    }
+
+                    muteBtn.className = `mute-user-btn ${peerData.isMuted ? 'is-muted' : ''}`;
+                    muteBtn.textContent = peerData.isMuted ? "🔇 Unmute" : "🔊 Mute";
+                };
+
+                item.appendChild(nameSpan);
+                item.appendChild(muteBtn);
+                userModalListContainer.appendChild(item);
+            }
+
+            if(!holdsRemotePeers) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.style.cssText = "text-align:center; font-size:12px; color:var(--text-muted); padding: 10px 0;";
+                emptyMsg.textContent = "No remote users connected yet.";
+                userModalListContainer.appendChild(emptyMsg);
+            }
         }
 
         function updateRoomStatus(forcedState, forcedText) {
